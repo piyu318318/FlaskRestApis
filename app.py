@@ -4,12 +4,16 @@ import datetime
 from functools import wraps
 import mysql.connector
 import configurations
-from handler.registerUserHandler import registerUserHandler
+from handler.UserHandler import UserHandler
 
 app = Flask(__name__)
-secret_key = configurations.SECRET_KEY
+secretKey = configurations.SECRET_KEY
+accessTokenMinutes = configurations.accessTokenMinutes
+refreshTokenDays = configurations.refreshTokenDays
+jwtAlgorithm = configurations.jwtAlgorithm
 
 databaseConnectionObj = None
+
 
 def databaseConectMethod():
     global databaseConnectionObj
@@ -25,6 +29,7 @@ def databaseConectMethod():
         print(f"Error connecting to MySQL: {e}")
         return None
 
+
 @app.route('/myapis/register', methods=['POST'])
 def registerAUser():
     data = request.json
@@ -38,10 +43,26 @@ def registerAUser():
     if not databaseConnectionObj:
         return make_response({"message": "Database connection failed"}, 500)
 
-    registerUserHandlerObj = registerUserHandler()
-    response = registerUserHandlerObj.registerUser(databaseConnectionObj, username, email, password,secret_key)
+    registerUserHandlerObj = UserHandler()
+    response = registerUserHandlerObj.registerUser(databaseConnectionObj, username, email, password, secretKey)
     return make_response(response, 200)
 
+
+@app.route('/myapis/login', methods=['POST'])
+def LoginUser():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+
+    print(username,password)
+
+    if not username or not password:
+        return make_response({'message': 'username and password are required', 'status': '200'})
+
+    LoginUserHandlerObj = UserHandler()
+    response = LoginUserHandlerObj.LoginUser(databaseConnectionObj,username,password,secretKey,jwtAlgorithm, accessTokenMinutes, refreshTokenDays)
+    return make_response(response)
+
 if __name__ == '__main__':
-    databaseConectMethod()  # Establish the DB connection before starting the app
+    databaseConectMethod()  # will create a connection with database
     app.run(debug=True)

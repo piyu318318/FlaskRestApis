@@ -7,7 +7,7 @@ import configurations
 from handler.registerUserHandler import registerUserHandler
 
 app = Flask(__name__)
-secret_key = app.config['SECRET_KEY'] = 'e720c4e4ef798f260b3395a09517c4a5672bf0d56d44a34ddcbb3a603d88b493'
+secret_key = configurations.SECRET_KEY
 
 databaseConnectionObj = None  # Initialize the global variable outside the function
 

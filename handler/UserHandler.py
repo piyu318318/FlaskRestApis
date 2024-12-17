@@ -1,7 +1,7 @@
 import bcrypt
 import jwt
 import datetime
-
+import json
 
 class UserHandler:
 
@@ -55,3 +55,12 @@ class UserHandler:
             "access_token": accessToken,
             "refresh_token": refreshToken
         }
+
+    def getUserDetails(self, databaseConnectionObj, username):
+        cursor = databaseConnectionObj.cursor()
+        cursor.execute("SELECT * FROM Users WHERE username = %s", (username,))
+        userDetails = cursor.fetchall()
+        if not userDetails:
+            return {"message": "User does not exist", "status": "404"}
+        cursor.close()
+        return {"message": "User found", "data": userDetails, "status": "200"}

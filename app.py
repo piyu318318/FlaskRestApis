@@ -15,6 +15,23 @@ jwtAlgorithm = configurations.jwtAlgorithm
 databaseConnectionObj = None
 
 
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization')  # Bearer token
+
+        if not token:
+            return jsonify({'message': 'Token is missing!'}), 401
+
+        try:
+            token = token.split(" ")[1]  # Remove "Bearer " prefix
+            decoded = jwt.decode(token, app.config['e720c4e4ef798f260b3395a09517c4a5672bf0d56d44a34ddcbb3a603d88b493'], algorithms=['HS256'])
+        except Exception as e:
+            return jsonify({'message': 'Invalid or expired token!'}), 401
+
+        return f(*args, **kwargs)
+    return decorated
+
 def databaseConectMethod():
     global databaseConnectionObj
     try:
@@ -54,13 +71,22 @@ def LoginUser():
     username = data.get('username')
     password = data.get('password')
 
-    print(username,password)
-
     if not username or not password:
         return make_response({'message': 'username and password are required', 'status': '200'})
 
     LoginUserHandlerObj = UserHandler()
     response = LoginUserHandlerObj.LoginUser(databaseConnectionObj,username,password,secretKey,jwtAlgorithm, accessTokenMinutes, refreshTokenDays)
+    return make_response(response)
+
+
+@app.route('/myapis/getUserDetails',methods=['GET'])
+def getUserDetails():
+    username = request.args.get('username')
+    if not username:
+        return make_response({"message": "Email parameter is missing", "status": "400"}, 400)
+
+    getUserDetailsObj = UserHandler()
+    response = getUserDetailsObj.getUserDetails(databaseConnectionObj,username)
     return make_response(response)
 
 if __name__ == '__main__':

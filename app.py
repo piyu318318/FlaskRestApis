@@ -9,10 +9,10 @@ from handler.registerUserHandler import registerUserHandler
 app = Flask(__name__)
 secret_key = configurations.SECRET_KEY
 
-databaseConnectionObj = None  # Initialize the global variable outside the function
+databaseConnectionObj = None
 
 def databaseConectMethod():
-    global databaseConnectionObj  # Reference the global variable
+    global databaseConnectionObj
     try:
         databaseConnectionObj = mysql.connector.connect(
             database=configurations.databaseName,

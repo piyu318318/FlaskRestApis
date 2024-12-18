@@ -1,94 +1,81 @@
-from flask import Flask, jsonify, request, make_response
-import jwt
-import datetime
-from functools import wraps
-import mysql.connector
-import configurations
+from flask import Flask, jsonify, request , make_response
 from handler.UserHandler import UserHandler
+import pymysql
+from handler import configurations
+from functools import wraps
+import jwt
 
 app = Flask(__name__)
-secretKey = configurations.SECRET_KEY
-accessTokenMinutes = configurations.accessTokenMinutes
-refreshTokenDays = configurations.refreshTokenDays
-jwtAlgorithm = configurations.jwtAlgorithm
+app.config['SECRET_KEY'] = configurations.SECRET_KEY
+JWTalgorithm = configurations.jwtAlgorithm
 
-databaseConnectionObj = None
+def getDatabaseConnection():
+    return pymysql.connect(
+        host=configurations.host,
+        port=configurations.port,
+        user=configurations.userName,
+        password=configurations.password,
+        database=configurations.databaseName
+    )
 
 
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.headers.get('Authorization')  # Bearer token
-
+        token = request.headers.get('Authorization')
         if not token:
             return jsonify({'message': 'Token is missing!'}), 401
-
         try:
-            token = token.split(" ")[1]  # Remove "Bearer " prefix
-            decoded = jwt.decode(token, app.config['e720c4e4ef798f260b3395a09517c4a5672bf0d56d44a34ddcbb3a603d88b493'], algorithms=['HS256'])
+            token = token.split(" ")[1]
+            decoded = jwt.decode(token, app.config['SECRET_KEY'], algorithms=[JWTalgorithm])
+            request.user_id = decoded['user_id']
         except Exception as e:
             return jsonify({'message': 'Invalid or expired token!'}), 401
-
         return f(*args, **kwargs)
     return decorated
 
-def databaseConectMethod():
-    global databaseConnectionObj
-    try:
-        databaseConnectionObj = mysql.connector.connect(
-            database=configurations.databaseName,
-            host=configurations.host,
-            port=configurations.port,
-            user=configurations.userName,
-            password=configurations.password
-        )
-    except mysql.connector.Error as e:
-        print(f"Error connecting to MySQL: {e}")
-        return None
 
-
+# Routes
 @app.route('/myapis/register', methods=['POST'])
-def registerAUser():
+def register():
     data = request.json
     username = data.get('username')
     email = data.get('email')
     password = data.get('password')
-
     if not username or not email or not password:
-        return make_response({"message": "username, email, and password are required"}, 400)
-
-    if not databaseConnectionObj:
-        return make_response({"message": "Database connection failed"}, 500)
-
-    registerUserHandlerObj = UserHandler()
-    response = registerUserHandlerObj.registerUser(databaseConnectionObj, username, email, password, secretKey)
-    return make_response(response, 200)
-
+        return {'message': 'All fields are required!'}, 400
+    userHandlerObj = UserHandler()
+    response = userHandlerObj.registerUser(username, email, password)
+    return make_response(response)
 
 @app.route('/myapis/login', methods=['POST'])
-def LoginUser():
+def login():
     data = request.json
     username = data.get('username')
     password = data.get('password')
-
-    if not username or not password:
-        return make_response({'message': 'username and password are required', 'status': '200'})
-
-    LoginUserHandlerObj = UserHandler()
-    response = LoginUserHandlerObj.LoginUser(databaseConnectionObj,username,password,secretKey,jwtAlgorithm, accessTokenMinutes, refreshTokenDays)
+    userHandlerObj = UserHandler()
+    response = userHandlerObj.loginUser(username, password, JWTalgorithm)
     return make_response(response)
 
 
-@app.route('/myapis/getUserDetails',methods=['GET'])
-def getUserDetails():
-    username = request.args.get('username')
-    if not username:
-        return make_response({"message": "Email parameter is missing", "status": "400"}, 400)
-
-    getUserDetailsObj = UserHandler()
-    response = getUserDetailsObj.getUserDetails(databaseConnectionObj,username)
+@app.route('/myapis/users', methods=['GET'])
+@token_required
+def getUsers():
+    data = request.json
+    email = data.get('email')
+    userHandlerObj = UserHandler()
+    response = userHandlerObj.getUSerDetails(email)
     return make_response(response)
+
+
+@app.route('/refresh', methods=['POST'])
+def refresh():
+    data = request.json
+    token = data.get('refresh_token')
+    UserHandlerObj = UserHandler()
+    response = UserHandlerObj.refreshToken(token, JWTalgorithm)
+    return response
+
 
 if __name__ == '__main__':
-    databaseConectMethod()  # will create a connection with database
     app.run(debug=True)

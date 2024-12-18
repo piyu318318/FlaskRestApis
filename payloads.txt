@@ -5,8 +5,8 @@ POST
 http://127.0.0.1:5000/myapis/register
 {
     "username": "piyush",
-    "password": "password123",
-    "email" : "dixitpiyush@gmail.com"
+    "email": "piyush@gmail.com",
+    "password": "password123"
 }
 *******************************************************************************************************
 
@@ -19,6 +19,5 @@ http://127.0.0.1:5000/myapis/login
 ********************************************************************************************************
 
 GET
-http://127.0.0.1:5000/myapis/getUserDetails
-email=dixitpiyush@gmail.com
+http://127.0.0.1:5000/myapis/users?email=piyuassh@gmail.com
 ********************************************************************************************************

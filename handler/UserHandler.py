@@ -1,66 +1,121 @@
+import pymysql
 import bcrypt
 import jwt
 import datetime
-import json
+from .configurations import SECRET_KEY, host ,userName , port, userName ,   password , databaseName, accessTokenMinutes, refreshTokenDays
+
 
 class UserHandler:
 
-    def registerUser(self, databaseConnectionObj, username, email, password, secretKey):
-        cursor = databaseConnectionObj.cursor()
+    def getDatabaseConnection(self):
+        return pymysql.connect(
+            host=host,
+            port=port,
+            user=userName,
+            password=password,
+            database=databaseName
+        )
 
-        cursor.execute("SELECT email FROM Users WHERE email = %s", (email,))
-        existingEmail = cursor.fetchone()
-        if existingEmail:
-            return {"message": "Email already exists", "status": "200"}
+    def registerUser(self, username, email, password):
+        hashedPassword = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        hashedPasswordDecode = hashedPassword.decode('utf-8')
+        try:
+            conn = self.getDatabaseConnection()
+            cursor = conn.cursor()
+            cursor.execute("select username from Users where username = %s ",(username,))
+            usernameResult = cursor.fetchone()
+            if usernameResult:
+                return {'message': 'use another username ' ,"status":"200"}
 
-        cursor.execute("SELECT username FROM Users WHERE username = %s", (username,))
-        existingUsername = cursor.fetchone()
-        if existingUsername:
-            return {"message": "Username is already in used please use another Username", "status": "200"}
+            cursor.execute("select email from Users where email = %s ", (email,))
+            emailResult = cursor.fetchone()
+            if emailResult:
+                return {'message': 'user already registered with this email id  ',"status":"200"}
 
-        password_with_pepper = password + secretKey
-        hashedPassword = bcrypt.hashpw(password_with_pepper.encode('utf-8'), bcrypt.gensalt())
-        cursor.execute("INSERT INTO Users (username, email, password) VALUES (%s, %s, %s)",
-                       (username, email, hashedPassword))
-        databaseConnectionObj.commit()
-        cursor.close()
-        return {"message": "User has registered successfully", "status": "200"}
+            cursor.execute("INSERT INTO Users (username, email, password) VALUES (%s, %s, %s)",
+                           (username, email, hashedPasswordDecode))
+            conn.commit()
+            return {'message': 'User registered successfully!',"status":"200"}, 200
+        except Exception as e:
+            return {'message': 'Error registering user!', 'error': str(e)}, 500
+        finally:
+            conn.close()
 
-    def LoginUser(self, databaseConnectionObj, username, password, jwtsecretKey, jwtAlgorithm, accessTokenMinutes,
-                  refreshTokenDays):
-        cursor = databaseConnectionObj.cursor()
-        cursor.execute("select username, password from Users where username = %s", (username,))
-        userRecord = cursor.fetchone()
-        if userRecord is None:
-            return {"message": "Invalid Username", "status": "200"}
+    def loginUser(self, username, password,JWTalgorithm):
+        if not username or not password:
+            return {'message': 'Username or password missing!',"status":"200"}
 
-        databaseUsername, databaseHashedPassword = userRecord
-        passwordWithKey = password + jwtsecretKey
+        try:
+            conn = self.getDatabaseConnection()
+            cursor = conn.cursor()
 
-        if not bcrypt.checkpw(passwordWithKey.encode('utf-8'), databaseHashedPassword.encode('utf-8')):
-            return {"message": "Invalid Password", "status": "200"}
+            cursor.execute("select email from Users where username = %s ", (username,))
+            usernameResult = cursor.fetchone()
+            if not usernameResult:
+                return {'message': 'user is not registered with this username please register !',"status":"200"}
 
-        accessTokenPayload = {"username": databaseUsername,
-                              "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=accessTokenMinutes)}
-        refreshTokenPayload = {"username": databaseUsername,
-                               "exp": datetime.datetime.utcnow() + datetime.timedelta(days=refreshTokenDays)}
 
-        accessToken = jwt.encode(accessTokenPayload, jwtsecretKey, algorithm=jwtAlgorithm)
-        refreshToken = jwt.encode(refreshTokenPayload, jwtsecretKey, algorithm=jwtAlgorithm)
+            cursor.execute("SELECT userid, password FROM Users WHERE username = %s", (username,))
+            user = cursor.fetchone()
+            userid = user[0]
 
-        cursor.close()
-        return {
-            "message": "Login successful",
-            "status": "200",
-            "access_token": accessToken,
-            "refresh_token": refreshToken
-        }
+            cursor.execute("select username from Users where username = %s ", (username,))
+            usernameResult = cursor.fetchone()
+            if usernameResult:
+                return {'message': 'use another username ', "status":"200"}
 
-    def getUserDetails(self, databaseConnectionObj, username):
-        cursor = databaseConnectionObj.cursor()
-        cursor.execute("SELECT * FROM Users WHERE username = %s", (username,))
-        userDetails = cursor.fetchall()
-        if not userDetails:
-            return {"message": "User does not exist", "status": "404"}
-        cursor.close()
-        return {"message": "User found", "data": userDetails, "status": "200"}
+            if not user or not bcrypt.checkpw(password.encode('utf-8'), userid.encode('utf-8')):
+                return {'message': 'Invalid credentials!', "status":"200"}
+
+            access_token = jwt.encode(
+                {'user_id': userid, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=accessTokenMinutes)},
+                SECRET_KEY,
+                algorithm=JWTalgorithm
+            )
+
+            refresh_token = jwt.encode(
+                {'user_id': userid, 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=refreshTokenDays)},
+                SECRET_KEY,
+                algorithm=JWTalgorithm
+            )
+
+            return {'access_token': access_token, 'refresh_token': refresh_token, "status":"200"},
+        except Exception as e:
+            return {'message': 'Error during login!', 'error': str(e)}, 500
+        finally:
+            conn.close()
+
+    def getUSerDetails(self, email):
+        try:
+            conn = self.getDatabaseConnection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT userid, username, email FROM Users where email = %s", email)
+            result = cursor.fetchone()
+            if not result:
+                return {'message': 'User not Found ',"status":"200"}
+            else:
+                userid = result[0]
+                username = result[1]
+                email = result[2]
+                return {'message': 'User Found ', 'userid': userid, 'username': username, 'email': email}
+        except Exception as e:
+            return {'message': 'Error fetching users!', 'error': str(e)}
+        finally:
+            conn.close()
+
+    def refreshToken(self, token,JWTalgorithm):
+        if not token:
+            return {'message': 'Refresh token is missing!',"status":"200"},
+        try:
+            decoded = jwt.decode(token, SECRET_KEY, algorithms=[JWTalgorithm])
+            userid = decoded['user_id']
+        except Exception as e:
+            return {'message': 'Invalid or expired refresh token!'}, 401
+
+        newAccessToken = jwt.encode(
+            {'user_id': userid, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=accessTokenMinutes)},
+            SECRET_KEY,
+            algorithm=JWTalgorithm
+        )
+
+        return {'access_token': newAccessToken}, 200

@@ -55,10 +55,11 @@ def login():
     password = data.get('password')
 
     if not username or not password:
-        return make_response({'message': 'username and password both fields are required!', 'status':'200'})
+        return make_response({'message': 'Username and password are required!', 'status': '400'}, 400)
+
     userHandlerObj = UserHandler()
-    response = userHandlerObj.loginUser(username, password, JWTalgorithm)
-    return make_response(response)
+    response, status_code = userHandlerObj.loginUser(username, password, JWTalgorithm)
+    return make_response(response, status_code)
 
 
 @app.route('/myapis/users', methods=['GET'])

@@ -41,49 +41,50 @@ class UserHandler:
         finally:
             conn.close()
 
-    def loginUser(self, username, password,JWTalgorithm):
+    def loginUser(self, username, password, JWTalgorithm):
         if not username or not password:
-            return {'message': 'Username or password missing!',"status":"200"}
+            return {'message': 'Username or password missing!', 'status': '400'}, 400
 
         try:
             conn = self.getDatabaseConnection()
             cursor = conn.cursor()
-
-            cursor.execute("select email from Users where username = %s ", (username,))
+            cursor.execute("SELECT email FROM Users WHERE username = %s", (username,))
             usernameResult = cursor.fetchone()
             if not usernameResult:
-                return {'message': 'user is not registered with this username please register !',"status":"200"}
-
+                return {'message': 'User is not registered with this username. Please register!', 'status': '404'}, 404
 
             cursor.execute("SELECT userid, password FROM Users WHERE username = %s", (username,))
             user = cursor.fetchone()
+            if not user or not bcrypt.checkpw(password.encode('utf-8'), user[1].encode('utf-8')):
+                return {'message': 'Invalid credentials!', 'status': '401'}, 401
+
             userid = user[0]
 
-            cursor.execute("select username from Users where username = %s ", (username,))
-            usernameResult = cursor.fetchone()
-            if usernameResult:
-                return {'message': 'use another username ', "status":"200"}
-
-            if not user or not bcrypt.checkpw(password.encode('utf-8'), userid.encode('utf-8')):
-                return {'message': 'Invalid credentials!', "status":"200"}
-
+            # Generate tokens
             access_token = jwt.encode(
                 {'user_id': userid, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=accessTokenMinutes)},
                 SECRET_KEY,
                 algorithm=JWTalgorithm
             )
-
             refresh_token = jwt.encode(
                 {'user_id': userid, 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=refreshTokenDays)},
                 SECRET_KEY,
                 algorithm=JWTalgorithm
             )
 
-            return {'access_token': access_token, 'refresh_token': refresh_token, "status":"200"},
+            return {
+                'message': 'Login successful!',
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+                'status': '200'
+            }, 200
+
         except Exception as e:
-            return {'message': 'Error during login!', 'error': str(e)}, 500
+            return {'message': 'Error during login!', 'error': str(e), 'status': '500'}, 500
+
         finally:
-            conn.close()
+            if 'conn' in locals():
+                conn.close()
 
     def getUSerDetails(self, email):
         try:

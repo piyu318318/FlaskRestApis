@@ -43,7 +43,7 @@ def register():
     email = data.get('email')
     password = data.get('password')
     if not username or not email or not password:
-        return {'message': 'All fields are required!'}, 400
+        return make_response({'message': 'All fields are required!','status':'200'})
     userHandlerObj = UserHandler()
     response = userHandlerObj.registerUser(username, email, password)
     return make_response(response)
@@ -53,6 +53,9 @@ def login():
     data = request.json
     username = data.get('username')
     password = data.get('password')
+
+    if not username or not password:
+        return make_response({'message': 'username and password both fields are required!', 'status':'200'})
     userHandlerObj = UserHandler()
     response = userHandlerObj.loginUser(username, password, JWTalgorithm)
     return make_response(response)
@@ -63,6 +66,8 @@ def login():
 def getUsers():
     data = request.json
     email = data.get('email')
+    if not email :
+        return make_response({'message': 'email  field is  required!', 'status':'200'})
     userHandlerObj = UserHandler()
     response = userHandlerObj.getUSerDetails(email)
     return make_response(response)
